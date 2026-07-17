@@ -512,8 +512,8 @@ input[type="range"] {
 
 /* ===== Botões escondidos durante gravação ===== */
 body.is-recording .topbar .iconbtn,
-body.is-recording .speed-quick,
 body.is-recording #btn-reset-scroll { opacity: 0; pointer-events: none; }
+body.is-recording .speed-quick { display: none; } /* o cronômetro ocupa o lugar */
 body.is-recording .prompter-drag,
 body.is-recording .prompter-resize { opacity: 0; pointer-events: none; }
 body.is-recording .prompter { outline: none; box-shadow: none; }
