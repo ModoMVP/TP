@@ -481,6 +481,10 @@ input[type="range"] {
   cursor: pointer;
 }
 .segmented button.selected { background: var(--accent); }
+.script-filter { margin-top: 14px; }
+.script-filter button { font-size: 12.5px; padding: 9px 2px; }
+.script-filter button[data-filter="gravado"].selected { background: #30d158; color: #003914; }
+.script-filter button[data-filter="recusado"].selected { background: var(--danger); }
 
 .switch { width: 50px; height: 30px; appearance: none; -webkit-appearance: none; background: var(--surface-2); border-radius: 999px; position: relative; cursor: pointer; flex: 0 0 auto; }
 .switch::after {

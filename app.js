@@ -409,11 +409,33 @@ function loadActiveScriptIntoPrompter() {
   resetScroll();
 }
 
+let scriptFilter = "all"; // all | none (sem status) | gravado | recusado
+
 function renderScriptList() {
   const ul = $("script-list");
   ul.innerHTML = "";
-  $("scripts-empty").classList.toggle("hidden", scripts.length > 0);
-  const sorted = [...scripts].sort((a, b) => b.updatedAt - a.updatedAt);
+
+  // chips do filtro: seleção + contadores
+  const count = (f) =>
+    f === "all" ? scripts.length : scripts.filter((s) => (s.status || "none") === f).length;
+  const labels = { all: "Todos", none: "Gravar", gravado: "Gravados", recusado: "Recusados" };
+  document.querySelectorAll("#script-filter button").forEach((b) => {
+    const f = b.dataset.filter;
+    b.classList.toggle("selected", f === scriptFilter);
+    b.textContent = `${labels[f]} (${count(f)})`;
+  });
+
+  const filtered = scripts.filter(
+    (s) => scriptFilter === "all" || (s.status || "none") === scriptFilter
+  );
+  const emptyEl = $("scripts-empty");
+  emptyEl.classList.toggle("hidden", filtered.length > 0);
+  if (!filtered.length) {
+    emptyEl.innerHTML = scripts.length
+      ? "Nenhum roteiro neste filtro."
+      : "Nenhum criativo salvo ainda.<br>Toque em “+ Novo criativo” para começar.";
+  }
+  const sorted = [...filtered].sort((a, b) => b.updatedAt - a.updatedAt);
   for (const s of sorted) {
     const li = document.createElement("li");
     li.className = "item-card"
@@ -491,6 +513,13 @@ function saveEditor() {
 }
 
 $("btn-new-script").addEventListener("click", () => openEditor(null));
+
+$("script-filter").addEventListener("click", (e) => {
+  const f = e.target.dataset && e.target.dataset.filter;
+  if (!f) return;
+  scriptFilter = f;
+  renderScriptList();
+});
 
 /* ---------- Importação de .txt com vários roteiros ----------
    Cada roteiro começa numa linha "### Nome". Texto antes do
@@ -1075,7 +1104,7 @@ $("btn-reset-settings").addEventListener("click", () => {
 /* ============================================================
    SERVICE WORKER + INIT
    ============================================================ */
-const APP_VERSION = "1.4.1";
+const APP_VERSION = "1.5.0";
 $("app-version").textContent = "v" + APP_VERSION;
 
 if ("serviceWorker" in navigator) {
