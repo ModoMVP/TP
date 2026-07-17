@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>TP Criativos</title>
+  <meta name="description" content="Teleprompter com câmera frontal para gravar criativos">
+  <meta name="theme-color" content="#000000">
+
+  <!-- PWA / iOS -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="TP Criativos">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ===== Câmera (fundo) ===== -->
+  <video id="camera" autoplay playsinline muted></video>
+
+  <!-- Aviso de permissão / erro de câmera -->
+  <div id="camera-error" class="camera-error hidden">
+    <div class="camera-error-box">
+      <div class="camera-error-icon">📷</div>
+      <h2 id="camera-error-title">Câmera indisponível</h2>
+      <p id="camera-error-msg"></p>
+      <button id="btn-retry-camera" class="btn btn-primary">Tentar novamente</button>
+    </div>
+  </div>
+
+  <!-- ===== Caixa do Teleprompter (arrastável e redimensionável) ===== -->
+  <div id="prompter" class="prompter">
+    <div id="prompter-drag" class="prompter-drag" title="Arraste para mover">
+      <span class="drag-dots">⠿</span>
+    </div>
+    <div id="prompter-viewport" class="prompter-viewport">
+      <div id="prompter-content" class="prompter-content">Toque em 📝 e cole o texto do seu criativo…</div>
+      <div id="prompter-guide" class="prompter-guide hidden"></div>
+    </div>
+    <div id="prompter-resize" class="prompter-resize" title="Arraste para redimensionar">
+      <svg viewBox="0 0 24 24" width="18" height="18"><path d="M22 22H16M22 22V16M22 22L13 13" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
+    </div>
+  </div>
+
+  <!-- ===== Contagem regressiva ===== -->
+  <div id="countdown" class="countdown hidden"><span id="countdown-num">3</span></div>
+
+  <!-- ===== Barra superior ===== -->
+  <header class="topbar">
+    <button id="btn-scripts" class="iconbtn" title="Meus criativos (textos)">📝</button>
+    <div id="rec-indicator" class="rec-indicator hidden">
+      <span class="rec-dot"></span><span id="rec-timer">00:00</span>
+    </div>
+    <div class="topbar-right">
+      <button id="btn-recordings" class="iconbtn" title="Gravações">🎬</button>
+      <button id="btn-settings" class="iconbtn" title="Configurações">⚙️</button>
+    </div>
+  </header>
+
+  <!-- ===== Barra inferior ===== -->
+  <footer class="bottombar">
+    <div class="speed-quick">
+      <button id="btn-speed-down" class="iconbtn small" title="Diminuir velocidade">−</button>
+      <span id="speed-label" class="speed-label">2.0×</span>
+      <button id="btn-speed-up" class="iconbtn small" title="Aumentar velocidade">+</button>
+    </div>
+
+    <div class="record-cluster">
+      <button id="btn-reset-scroll" class="iconbtn" title="Voltar texto ao início">⏮</button>
+      <button id="btn-record" class="record-btn" title="Gravar"><span class="record-btn-inner"></span></button>
+      <button id="btn-play" class="iconbtn" title="Rolar / pausar texto">▶</button>
+    </div>
+  </footer>
+
+  <!-- ===== Painel: Meus Criativos (textos) ===== -->
+  <div id="panel-scripts" class="panel hidden">
+    <div class="panel-header">
+      <h2>📝 Meus criativos</h2>
+      <button class="iconbtn panel-close" data-close="panel-scripts">✕</button>
+    </div>
+    <div class="panel-body">
+      <button id="btn-new-script" class="btn btn-primary btn-block">+ Novo criativo</button>
+      <ul id="script-list" class="item-list"></ul>
+      <p id="scripts-empty" class="empty-msg hidden">Nenhum criativo salvo ainda.<br>Toque em “+ Novo criativo” para começar.</p>
+    </div>
+  </div>
+
+  <!-- ===== Painel: Editor de criativo ===== -->
+  <div id="panel-editor" class="panel hidden">
+    <div class="panel-header">
+      <h2 id="editor-title">Novo criativo</h2>
+      <button class="iconbtn panel-close" data-close="panel-editor">✕</button>
+    </div>
+    <div class="panel-body">
+      <label class="field-label" for="script-name">Nome</label>
+      <input id="script-name" class="input" type="text" placeholder="Ex.: Criativo VSL 01" maxlength="80">
+      <div class="editor-toolbar">
+        <label class="field-label" for="script-text">Texto</label>
+        <button id="btn-paste" class="btn btn-ghost small">📋 Colar</button>
+      </div>
+      <textarea id="script-text" class="textarea" placeholder="Cole ou digite aqui o texto do seu criativo…"></textarea>
+      <div class="editor-actions">
+        <button id="btn-save-script" class="btn btn-primary">Salvar</button>
+        <button id="btn-use-script" class="btn btn-ghost">Salvar e usar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Painel: Configurações ===== -->
+  <div id="panel-settings" class="panel hidden">
+    <div class="panel-header">
+      <h2>⚙️ Configurações</h2>
+      <button class="iconbtn panel-close" data-close="panel-settings">✕</button>
+    </div>
+    <div class="panel-body">
+
+      <div class="setting">
+        <label for="set-speed">Velocidade do texto <span id="val-speed" class="setting-val"></span></label>
+        <input id="set-speed" type="range" min="0.5" max="6" step="0.1">
+      </div>
+
+      <div class="setting">
+        <label for="set-fontsize">Tamanho da fonte <span id="val-fontsize" class="setting-val"></span></label>
+        <input id="set-fontsize" type="range" min="14" max="72" step="1">
+      </div>
+
+      <div class="setting">
+        <label for="set-lineheight">Espaçamento entre linhas <span id="val-lineheight" class="setting-val"></span></label>
+        <input id="set-lineheight" type="range" min="1.1" max="2.2" step="0.05">
+      </div>
+
+      <div class="setting">
+        <label>Cor do texto</label>
+        <div class="color-row" id="text-color-row">
+          <button class="color-swatch" data-color="#ffffff" style="background:#ffffff"></button>
+          <button class="color-swatch" data-color="#ffe600" style="background:#ffe600"></button>
+          <button class="color-swatch" data-color="#00ff88" style="background:#00ff88"></button>
+          <button class="color-swatch" data-color="#00ccff" style="background:#00ccff"></button>
+          <button class="color-swatch" data-color="#ff5555" style="background:#ff5555"></button>
+          <input id="set-textcolor" type="color" class="color-custom" title="Cor personalizada">
+        </div>
+      </div>
+
+      <div class="setting">
+        <label>Cor do fundo do texto</label>
+        <div class="color-row" id="bg-color-row">
+          <button class="color-swatch" data-color="#000000" style="background:#000000"></button>
+          <button class="color-swatch" data-color="#1a1a2e" style="background:#1a1a2e"></button>
+          <button class="color-swatch" data-color="#00331a" style="background:#00331a"></button>
+          <button class="color-swatch" data-color="#331a00" style="background:#331a00"></button>
+          <input id="set-bgcolor" type="color" class="color-custom" title="Cor personalizada">
+        </div>
+      </div>
+
+      <div class="setting">
+        <label for="set-bgopacity">Transparência do fundo <span id="val-bgopacity" class="setting-val"></span></label>
+        <input id="set-bgopacity" type="range" min="0" max="100" step="5">
+      </div>
+
+      <div class="setting">
+        <label for="set-align">Alinhamento do texto</label>
+        <div class="segmented" id="set-align">
+          <button data-align="left">Esq.</button>
+          <button data-align="center">Centro</button>
+          <button data-align="right">Dir.</button>
+        </div>
+      </div>
+
+      <div class="setting setting-row">
+        <label for="set-mirror">Espelhar texto (teleprompter físico)</label>
+        <input id="set-mirror" type="checkbox" class="switch">
+      </div>
+
+      <div class="setting setting-row">
+        <label for="set-guide">Linha-guia de leitura</label>
+        <input id="set-guide" type="checkbox" class="switch">
+      </div>
+
+      <div class="setting setting-row">
+        <label for="set-autoscroll">Rolar texto ao iniciar gravação</label>
+        <input id="set-autoscroll" type="checkbox" class="switch">
+      </div>
+
+      <div class="setting">
+        <label for="set-countdown">Contagem antes de gravar <span id="val-countdown" class="setting-val"></span></label>
+        <input id="set-countdown" type="range" min="0" max="10" step="1">
+      </div>
+
+      <button id="btn-reset-settings" class="btn btn-ghost btn-block">Restaurar padrões</button>
+    </div>
+  </div>
+
+  <!-- ===== Painel: Gravações ===== -->
+  <div id="panel-recordings" class="panel hidden">
+    <div class="panel-header">
+      <h2>🎬 Gravações</h2>
+      <button class="iconbtn panel-close" data-close="panel-recordings">✕</button>
+    </div>
+    <div class="panel-body">
+      <ul id="recording-list" class="item-list"></ul>
+      <p id="recordings-empty" class="empty-msg hidden">Nenhuma gravação ainda.<br>Toque no botão vermelho para gravar seu primeiro criativo.</p>
+      <p class="hint">💡 Toque em “Salvar” para enviar o vídeo às Fotos do iPhone (Compartilhar → Salvar Vídeo).</p>
+    </div>
+  </div>
+
+  <!-- ===== Player de gravação ===== -->
+  <div id="player-modal" class="player-modal hidden">
+    <button id="btn-close-player" class="iconbtn player-close">✕</button>
+    <video id="player-video" controls playsinline></video>
+  </div>
+
+  <!-- Backdrop -->
+  <div id="backdrop" class="backdrop hidden"></div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
