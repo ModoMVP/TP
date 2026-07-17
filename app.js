@@ -48,9 +48,13 @@ function hexToRgba(hex, alpha) {
    **negrito**  *itálico*  __sublinhado__  ==destaque==
    [amarelo]texto[/amarelo]  ou  [#ff0055]texto[/]                            */
 const COLOR_NAMES = {
-  amarelo: "#ffe600", vermelho: "#ff453a", verde: "#00ff88", azul: "#00ccff",
-  laranja: "#ff9f0a", rosa: "#ff6bcb", roxo: "#bf5af2", ciano: "#64d2ff",
-  branco: "#ffffff", preto: "#000000", cinza: "#98989d",
+  amarelo: "#e6b800", vermelho: "#e02020", verde: "#00913d", azul: "#0a84ff",
+  laranja: "#e07000", rosa: "#e0219a", roxo: "#8944ce", ciano: "#0090c0",
+  branco: "#ffffff", preto: "#000000", cinza: "#666a70",
+  // aliases em inglês (IA às vezes gera assim)
+  yellow: "#e6b800", red: "#e02020", green: "#00913d", blue: "#0a84ff",
+  orange: "#e07000", pink: "#e0219a", purple: "#8944ce", cyan: "#0090c0",
+  white: "#ffffff", black: "#000000", gray: "#666a70", grey: "#666a70",
 };
 
 function escapeHtml(s) {
@@ -89,9 +93,9 @@ const DEFAULT_SETTINGS = {
   speed: 2.0,          // multiplicador (base 28 px/s)
   fontSize: 32,        // px
   lineHeight: 1.5,
-  textColor: "#ffe600",
-  bgColor: "#000000",
-  bgOpacity: 55,       // %
+  textColor: "#000000", // sem cor no texto = letra preta
+  bgColor: "#ffffff",
+  bgOpacity: 75,       // %
   align: "center",
   mirror: false,
   guide: false,
@@ -112,6 +116,17 @@ const store = {
 };
 
 let settings = { ...DEFAULT_SETTINGS, ...store.get("tp.settings", {}) };
+
+// migração v2: padrão antigo (letra amarela / fundo preto) → letra preta / fundo branco
+if (!settings._v || settings._v < 2) {
+  if (settings.textColor === "#ffe600") settings.textColor = "#000000";
+  if (settings.bgColor === "#000000") {
+    settings.bgColor = "#ffffff";
+    settings.bgOpacity = Math.max(settings.bgOpacity, 75);
+  }
+  settings._v = 2;
+  store.set("tp.settings", settings);
+}
 let scripts = store.get("tp.scripts", []);         // [{id, name, text, updatedAt}]
 let activeScriptId = store.get("tp.activeScript", null);
 let editingScriptId = null;
@@ -128,6 +143,11 @@ async function initCamera() {
   const errBox = $("camera-error");
   errBox.classList.add("hidden");
   try {
+    // solta o stream antigo antes de pedir um novo (evita conflito no iOS)
+    if (mediaStream) {
+      mediaStream.getTracks().forEach((t) => t.stop());
+      mediaStream = null;
+    }
     mediaStream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: "user",
@@ -141,6 +161,8 @@ async function initCamera() {
       },
     });
     $("camera").srcObject = mediaStream;
+    $("camera").play().catch(() => {});
+    watchStreamHealth();
   } catch (err) {
     let msg;
     if (err && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError")) {
@@ -158,6 +180,36 @@ async function initCamera() {
 }
 
 $("btn-retry-camera").addEventListener("click", initCamera);
+
+/* O iOS congela/derruba o stream da câmera quando o app vai para segundo
+   plano ou quando abre o seletor de arquivos / folha de compartilhar.
+   Aqui detectamos e religamos a câmera automaticamente. */
+let recoveringCamera = false;
+
+function cameraIsDead() {
+  if (!mediaStream) return true;
+  const t = mediaStream.getVideoTracks()[0];
+  return !t || t.readyState === "ended" || t.muted;
+}
+
+async function recoverCamera() {
+  if (recoveringCamera || isRecording) return; // nunca religar no meio da gravação
+  recoveringCamera = true;
+  try { await initCamera(); } finally { recoveringCamera = false; }
+}
+
+function watchStreamHealth() {
+  if (!mediaStream) return;
+  mediaStream.getVideoTracks().forEach((track) => {
+    track.addEventListener("ended", () => recoverCamera());
+    track.addEventListener("mute", () => {
+      // "mute" temporário é normal ao trocar de app; só religa se persistir
+      setTimeout(() => {
+        if (track.muted && document.visibilityState === "visible") recoverCamera();
+      }, 1500);
+    });
+  });
+}
 
 /* ============================================================
    TELEPROMPTER — render + rolagem
@@ -288,9 +340,8 @@ function saveGeometry() {
   });
 }
 
-/* mover */
-(() => {
-  const handle = $("prompter-drag");
+/* mover — barras de cima e de baixo */
+function makeDragHandle(handle) {
   let sx = 0, sy = 0, ox = 0, oy = 0, dragging = false;
   handle.addEventListener("pointerdown", (e) => {
     dragging = true;
@@ -311,7 +362,9 @@ function saveGeometry() {
   const end = () => { if (dragging) { dragging = false; saveGeometry(); } };
   handle.addEventListener("pointerup", end);
   handle.addEventListener("pointercancel", end);
-})();
+}
+makeDragHandle($("prompter-drag"));
+makeDragHandle($("prompter-drag-b"));
 
 /* redimensionar */
 (() => {
@@ -869,10 +922,21 @@ function releaseWakeLock() {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
     if (scrolling || isRecording) requestWakeLock();
-    // iOS pode congelar o stream ao voltar do background
-    const cam = $("camera");
-    if (mediaStream && cam.srcObject && cam.paused) cam.play().catch(() => {});
+    // iOS pode congelar o stream ao voltar do background / seletor de arquivos
+    if (cameraIsDead()) recoverCamera();
+    else {
+      const cam = $("camera");
+      if (cam.paused) cam.play().catch(() => {});
+    }
   }
+});
+
+window.addEventListener("pageshow", (e) => {
+  if (e.persisted && cameraIsDead()) recoverCamera();
+});
+
+window.addEventListener("focus", () => {
+  if (cameraIsDead()) recoverCamera();
 });
 
 /* ============================================================

@@ -80,14 +80,15 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.75);
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.85);
   cursor: grab;
   touch-action: none;
   font-size: 16px;
   letter-spacing: 3px;
 }
 .prompter-drag:active { cursor: grabbing; }
+.prompter-drag-bottom { padding-right: 44px; } /* espaço para o canto de redimensionar */
 
 .prompter-viewport {
   position: relative;
@@ -105,7 +106,6 @@ html, body {
   word-wrap: break-word;
   white-space: pre-wrap;
   font-weight: 600;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 .prompter-guide {
@@ -418,8 +418,8 @@ html, body {
   color: #000;
   border-radius: 5px;
   padding: 0 5px;
-  text-shadow: none;
 }
+.color-swatch[data-color="#ffffff"], .color-custom { outline: 1px solid rgba(0,0,0,0.3); }
 
 /* ===== Configurações ===== */
 .setting { margin: 18px 0; }
