@@ -76,6 +76,25 @@ No app: **📝 → editar criativo → “🎨 Formatação” → 📋 Copiar p
 Cole esse prompt no ChatGPT/Claude junto com o seu pedido (ex.: “roteiro de 30s sobre X”)
 e a resposta já sai pronta para colar no app.
 
+## 📥 Importar vários roteiros de um .txt
+
+Em **📝 Meus criativos → “📥 Importar .txt”** você importa um arquivo com N roteiros de uma
+vez — cada um vira um criativo separado. Formato do arquivo:
+
+```
+### Criativo 01 — Gancho dor
+**Pare de perder dinheiro** com anúncios que não convertem…
+
+### Criativo 02 — Prova social
+[amarelo]Mais de 500 alunos[/amarelo] já aplicaram esse método…
+```
+
+- Cada linha `### Nome` inicia um roteiro novo; o texto vai até o próximo `###`
+- A formatação (negrito, cores…) funciona normalmente dentro de cada roteiro
+- Nomes repetidos ganham sufixo automático “(2)”, “(3)”…
+- Prompt pronto para a IA gerar o arquivo inteiro: botão **“📋 Copiar prompt para IA
+  (vários roteiros)”**, dentro de “📄 Como preparar o .txt” no painel de criativos
+
 ## 🔧 Detalhes técnicos
 
 - PWA estático: HTML + CSS + JS puros, sem dependências, sem backend

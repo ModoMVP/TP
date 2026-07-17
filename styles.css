@@ -397,6 +397,17 @@ html, body {
   -webkit-user-select: text;
 }
 .format-help-body mark { background: #ffe600; color: #000; border-radius: 3px; padding: 0 3px; }
+.format-example {
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
 .format-colors, .format-tip { color: var(--text-dim); }
 .format-help .btn { align-self: flex-start; margin-top: 2px; }
 

@@ -430,6 +430,103 @@ function saveEditor() {
 
 $("btn-new-script").addEventListener("click", () => openEditor(null));
 
+/* ---------- Importação de .txt com vários roteiros ----------
+   Cada roteiro começa numa linha "### Nome". Texto antes do
+   primeiro ### vira um roteiro "Importado".                    */
+function parseScriptsTxt(text) {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  const blocks = [];
+  let cur = null;
+  for (const line of lines) {
+    const m = line.match(/^###\s*(.+?)\s*$/);
+    if (m) {
+      cur = { name: m[1], lines: [] };
+      blocks.push(cur);
+    } else if (cur) {
+      cur.lines.push(line);
+    } else if (line.trim()) {
+      cur = { name: null, lines: [line] };
+      blocks.push(cur);
+    }
+  }
+  return blocks
+    .map((b) => ({ name: b.name, text: b.lines.join("\n").trim() }))
+    .filter((b) => b.text);
+}
+
+function uniqueScriptName(name) {
+  const names = new Set(scripts.map((s) => s.name));
+  if (!names.has(name)) return name;
+  let i = 2;
+  while (names.has(`${name} (${i})`)) i++;
+  return `${name} (${i})`;
+}
+
+$("btn-import-txt").addEventListener("click", () => $("file-import").click());
+
+$("file-import").addEventListener("change", async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = ""; // permite reimportar o mesmo arquivo
+  if (!file) return;
+  let text;
+  try {
+    text = await file.text();
+  } catch {
+    toast("Não consegui ler o arquivo");
+    return;
+  }
+  const parsed = parseScriptsTxt(text);
+  if (!parsed.length) {
+    toast("Nenhum roteiro encontrado no arquivo");
+    return;
+  }
+  const now = Date.now();
+  parsed.forEach((p, i) => {
+    scripts.push({
+      id: uid(),
+      name: uniqueScriptName(p.name || `Importado ${i + 1}`),
+      text: p.text,
+      updatedAt: now - i, // mantém a ordem do arquivo na listagem
+    });
+  });
+  saveScripts();
+  renderScriptList();
+  toast(`✅ ${parsed.length} criativo${parsed.length > 1 ? "s" : ""} importado${parsed.length > 1 ? "s" : ""}`);
+});
+
+const AI_PROMPT_MULTI = `Você vai escrever VÁRIOS roteiros de criativos para eu importar em um app de teleprompter, em um único arquivo .txt.
+
+ESTRUTURA DO ARQUIVO (obrigatória):
+- Cada roteiro começa com uma linha exatamente assim: ### Nome do criativo
+- Depois do ### vem o texto do roteiro, até o próximo ###.
+- Exemplo:
+### Criativo 01 — Gancho dor
+texto do roteiro aqui...
+
+### Criativo 02 — Prova social
+texto do roteiro aqui...
+
+REGRAS DE FORMATAÇÃO dentro de cada roteiro — use APENAS estas marcações:
+- **texto** para negrito (palavras-chave, ganchos, CTAs)
+- *texto* para itálico
+- __texto__ para sublinhado
+- ==texto== para destacar com marca-texto (fundo amarelo)
+- [amarelo]texto[/amarelo] para colorir. Cores disponíveis: amarelo, vermelho, verde, azul, laranja, rosa, roxo, ciano, branco, cinza. Também aceita cor hexadecimal: [#ff0055]texto[/]
+- NUNCA aninhe uma cor dentro de outra cor.
+- NÃO use nenhuma outra marcação: sem listas (-), sem tabelas, sem HTML, sem blocos de código. O # só pode aparecer no ### do nome de cada roteiro.
+- Separe as frases/blocos com quebras de linha simples, em trechos curtos e fáceis de ler em voz alta.
+
+Responda SOMENTE com o conteúdo do arquivo, sem explicações antes ou depois.`;
+
+$("btn-copy-ai-prompt-multi").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(AI_PROMPT_MULTI);
+    toast("Prompt copiado! Peça os roteiros à IA e salve a resposta como .txt");
+  } catch {
+    prompt("Copie o prompt abaixo:", AI_PROMPT_MULTI);
+  }
+});
+
 $("btn-save-script").addEventListener("click", () => {
   const s = saveEditor();
   if (!s) return;

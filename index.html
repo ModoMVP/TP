@@ -85,6 +85,23 @@
     </div>
     <div class="panel-body">
       <button id="btn-new-script" class="btn btn-primary btn-block">+ Novo criativo</button>
+      <button id="btn-import-txt" class="btn btn-ghost btn-block">📥 Importar .txt (vários roteiros)</button>
+      <input id="file-import" type="file" accept=".txt,text/plain" hidden>
+
+      <details class="format-help">
+        <summary>📄 Como preparar o .txt para importar</summary>
+        <div class="format-help-body">
+          <p>Comece cada roteiro com uma linha <code>### Nome do criativo</code>. Tudo o que vem depois, até o próximo <code>###</code>, vira o texto daquele criativo:</p>
+          <pre class="format-example">### Criativo 01 — Gancho dor
+**Pare de perder dinheiro** com anúncios…
+
+### Criativo 02 — Prova social
+[amarelo]Mais de 500 alunos[/amarelo] já…</pre>
+          <p>A formatação (<code>**negrito**</code>, cores etc.) funciona normalmente dentro de cada roteiro.</p>
+          <button id="btn-copy-ai-prompt-multi" class="btn btn-primary small">📋 Copiar prompt para IA (vários roteiros)</button>
+        </div>
+      </details>
+
       <ul id="script-list" class="item-list"></ul>
       <p id="scripts-empty" class="empty-msg hidden">Nenhum criativo salvo ainda.<br>Toque em “+ Novo criativo” para começar.</p>
     </div>
