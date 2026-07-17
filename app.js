@@ -101,6 +101,7 @@ const DEFAULT_SETTINGS = {
   guide: false,
   autoScrollOnRecord: true,
   countdown: 3,        // segundos
+  hqAudio: true,       // áudio cru (sem processamento de voz) — melhor qualidade + aceita mic externo
 };
 
 const store = {
@@ -148,6 +149,9 @@ async function initCamera() {
       mediaStream.getTracks().forEach((t) => t.stop());
       mediaStream = null;
     }
+    // hqAudio ON = desliga o processamento de voz (eco/ruído/ganho).
+    // Isso melhora MUITO a qualidade e faz o iOS respeitar o mic externo (lapela/Boya).
+    const proc = !settings.hqAudio;
     mediaStream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: "user",
@@ -156,8 +160,9 @@ async function initCamera() {
         frameRate: { ideal: 30 },
       },
       audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
+        echoCancellation: proc,
+        noiseSuppression: proc,
+        autoGainControl: proc,
       },
     });
     $("camera").srcObject = mediaStream;
@@ -861,7 +866,9 @@ async function startRecording() {
   try {
     mediaRecorder = new MediaRecorder(
       mediaStream,
-      mime ? { mimeType: mime, videoBitsPerSecond: 8_000_000 } : undefined
+      mime
+        ? { mimeType: mime, videoBitsPerSecond: 8_000_000, audioBitsPerSecond: 256_000 }
+        : undefined
     );
   } catch (err) {
     toast("Erro ao iniciar gravação: " + err.message);
@@ -1026,6 +1033,7 @@ function syncSettingsUI() {
   $("set-mirror").checked = settings.mirror;
   $("set-guide").checked = settings.guide;
   $("set-autoscroll").checked = settings.autoScrollOnRecord;
+  $("set-hqaudio").checked = settings.hqAudio;
   $("set-textcolor").value = settings.textColor;
   $("set-bgcolor").value = settings.bgColor;
 
@@ -1064,6 +1072,15 @@ function bindSwitch(id, key) {
 bindSwitch("set-mirror", "mirror");
 bindSwitch("set-guide", "guide");
 bindSwitch("set-autoscroll", "autoScrollOnRecord");
+
+// mudar a qualidade do áudio exige religar a câmera (a constraint é fixada no getUserMedia)
+$("set-hqaudio").addEventListener("change", (e) => {
+  settings.hqAudio = e.target.checked;
+  saveSettings();
+  if (isRecording) { toast("Vale na próxima gravação"); return; }
+  toast(settings.hqAudio ? "Áudio em alta qualidade ativado" : "Processamento de voz ativado");
+  initCamera();
+});
 
 $("text-color-row").addEventListener("click", (e) => {
   const color = e.target.dataset && e.target.dataset.color;
@@ -1104,7 +1121,7 @@ $("btn-reset-settings").addEventListener("click", () => {
 /* ============================================================
    SERVICE WORKER + INIT
    ============================================================ */
-const APP_VERSION = "1.5.0";
+const APP_VERSION = "1.6.0";
 $("app-version").textContent = "v" + APP_VERSION;
 
 if ("serviceWorker" in navigator) {
