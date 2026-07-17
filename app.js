@@ -279,40 +279,38 @@ function updateActiveMicLabel() {
 }
 
 if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
-  navigator.mediaDevices.addEventListener("devicechange", () => {
-    refreshMicList();
-    // conectou/desconectou a lapela sem o app estar gravando → religa na entrada nova
-    if (!isRecording && settings.micDeviceId) recoverCamera();
-  });
+  // apenas atualiza a lista; NÃO reinicia a câmera aqui (evita piscar ao trocar de mic)
+  navigator.mediaDevices.addEventListener("devicechange", () => refreshMicList());
 }
 
 /* O iOS congela/derruba o stream da câmera quando o app vai para segundo
    plano ou quando abre o seletor de arquivos / folha de compartilhar.
    Aqui detectamos e religamos a câmera automaticamente. */
 let recoveringCamera = false;
+let lastRecoverAt = 0;
 
+// só consideramos "morta" se a track ENCERROU de fato.
+// track.muted é transitório no iOS (o mic externo reconfigura a sessão de áudio e
+// silencia o vídeo por um instante) — reagir a isso causava piscar em loop.
 function cameraIsDead() {
   if (!mediaStream) return true;
   const t = mediaStream.getVideoTracks()[0];
-  return !t || t.readyState === "ended" || t.muted;
+  return !t || t.readyState === "ended";
 }
 
 async function recoverCamera() {
-  if (recoveringCamera || isRecording) return; // nunca religar no meio da gravação
+  if (recoveringCamera || isRecording) return;      // nunca religar no meio da gravação
+  if (Date.now() - lastRecoverAt < 4000) return;    // cooldown: no máx. 1 religada a cada 4s
   recoveringCamera = true;
+  lastRecoverAt = Date.now();
   try { await initCamera(); } finally { recoveringCamera = false; }
 }
 
 function watchStreamHealth() {
   if (!mediaStream) return;
+  // só religa quando a câmera realmente encerra (desconexão real), não em mute transitório
   mediaStream.getVideoTracks().forEach((track) => {
     track.addEventListener("ended", () => recoverCamera());
-    track.addEventListener("mute", () => {
-      // "mute" temporário é normal ao trocar de app; só religa se persistir
-      setTimeout(() => {
-        if (track.muted && document.visibilityState === "visible") recoverCamera();
-      }, 1500);
-    });
   });
 }
 
@@ -1268,7 +1266,7 @@ $("btn-reset-settings").addEventListener("click", () => {
 /* ============================================================
    SERVICE WORKER + INIT
    ============================================================ */
-const APP_VERSION = "1.9.0";
+const APP_VERSION = "1.9.1";
 $("app-version").textContent = "v" + APP_VERSION;
 
 if ("serviceWorker" in navigator) {
