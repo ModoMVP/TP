@@ -332,10 +332,24 @@ html, body {
   border-radius: var(--radius);
   padding: 12px 14px;
 }
-.item-card.active { outline: 2px solid var(--accent); }
+/* status do roteiro: gravado (verde claro) / recusado (vermelho claro) */
+.item-card.status-gravado {
+  background: rgba(48, 209, 88, 0.22);
+  outline: 1px solid rgba(48, 209, 88, 0.55);
+}
+.item-card.status-recusado {
+  background: rgba(255, 69, 58, 0.2);
+  outline: 1px solid rgba(255, 69, 58, 0.5);
+}
+.item-card.active, .item-card.status-gravado.active, .item-card.status-recusado.active {
+  outline: 2px solid var(--accent);
+}
+.status-btn.on-gravado { background: #30d158; color: #003914; font-weight: 700; }
+.status-btn.on-recusado { background: var(--danger); color: #fff; font-weight: 700; }
 .item-card .item-title { font-weight: 700; font-size: 16px; margin-bottom: 2px; overflow-wrap: anywhere; }
 .item-card .item-sub { color: var(--text-dim); font-size: 13px; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .item-card .item-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.item-card .item-actions + .item-actions { margin-top: 8px; }
 
 /* ===== Botões genéricos ===== */
 .btn {

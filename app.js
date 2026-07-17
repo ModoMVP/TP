@@ -416,7 +416,9 @@ function renderScriptList() {
   const sorted = [...scripts].sort((a, b) => b.updatedAt - a.updatedAt);
   for (const s of sorted) {
     const li = document.createElement("li");
-    li.className = "item-card" + (s.id === activeScriptId ? " active" : "");
+    li.className = "item-card"
+      + (s.id === activeScriptId ? " active" : "")
+      + (s.status ? " status-" + s.status : "");
     const preview = stripMarkup(s.text).slice(0, 120).replace(/\s+/g, " ");
     li.innerHTML = `
       <div class="item-title"></div>
@@ -425,6 +427,10 @@ function renderScriptList() {
         <button class="btn btn-primary small" data-act="use">Usar</button>
         <button class="btn small" data-act="edit">Editar</button>
         <button class="btn btn-danger small" data-act="del">Excluir</button>
+      </div>
+      <div class="item-actions">
+        <button class="btn small status-btn ${s.status === "gravado" ? "on-gravado" : ""}" data-act="gravado">✅ Gravado</button>
+        <button class="btn small status-btn ${s.status === "recusado" ? "on-recusado" : ""}" data-act="recusado">🚫 Recusado</button>
       </div>`;
     li.querySelector(".item-title").textContent = s.name;
     li.querySelector(".item-sub").textContent = preview || "(sem texto)";
@@ -438,6 +444,10 @@ function renderScriptList() {
         toast(`Usando: ${s.name}`);
       } else if (act === "edit") {
         openEditor(s.id);
+      } else if (act === "gravado" || act === "recusado") {
+        s.status = s.status === act ? null : act; // toca de novo = tira o status
+        saveScripts();
+        renderScriptList();
       } else if (act === "del") {
         if (!confirm(`Excluir o criativo "${s.name}"?`)) return;
         scripts = scripts.filter((x) => x.id !== s.id);
