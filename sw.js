@@ -1,7 +1,7 @@
 /* Service Worker — TP Criativos
    Cache-first do app shell: depois de instalado, funciona 100% offline.
    Ao publicar mudanças, incremente a VERSION para forçar atualização. */
-const VERSION = "v1.4.0";
+const VERSION = "v1.4.1";
 const CACHE = `tp-criativos-${VERSION}`;
 const ASSETS = [
   "./",

@@ -427,10 +427,9 @@ function renderScriptList() {
         <button class="btn btn-primary small" data-act="use">Usar</button>
         <button class="btn small" data-act="edit">Editar</button>
         <button class="btn btn-danger small" data-act="del">Excluir</button>
-      </div>
-      <div class="item-actions">
-        <button class="btn small status-btn ${s.status === "gravado" ? "on-gravado" : ""}" data-act="gravado">✅ Gravado</button>
-        <button class="btn small status-btn ${s.status === "recusado" ? "on-recusado" : ""}" data-act="recusado">🚫 Recusado</button>
+        <span class="spacer"></span>
+        <button class="btn small status-btn ${s.status === "gravado" ? "on-gravado" : ""}" data-act="gravado">Gravado</button>
+        <button class="btn small status-btn ${s.status === "recusado" ? "on-recusado" : ""}" data-act="recusado">Recusado</button>
       </div>`;
     li.querySelector(".item-title").textContent = s.name;
     li.querySelector(".item-sub").textContent = preview || "(sem texto)";
@@ -1076,9 +1075,29 @@ $("btn-reset-settings").addEventListener("click", () => {
 /* ============================================================
    SERVICE WORKER + INIT
    ============================================================ */
+const APP_VERSION = "1.4.1";
+$("app-version").textContent = "v" + APP_VERSION;
+
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch(() => { /* offline-first opcional */ });
+    navigator.serviceWorker
+      .register("sw.js")
+      .then((reg) => {
+        // confere se há versão nova agora e sempre que o app voltar ao primeiro plano
+        reg.update().catch(() => {});
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") reg.update().catch(() => {});
+        });
+      })
+      .catch(() => { /* offline-first opcional */ });
+
+    // quando uma versão nova assume, recarrega sozinho (nunca no meio de uma gravação)
+    let hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!hadController) { hadController = true; return; } // primeira instalação
+      if (isRecording) return;
+      location.reload();
+    });
   });
 }
 
