@@ -140,7 +140,8 @@ function saveScripts() { store.set("tp.scripts", scripts); }
 /* ============================================================
    CÂMERA
    ============================================================ */
-let mediaStream = null;
+let mediaStream = null; // vídeo da câmera (preview + gravação)
+let micStream = null;   // ÁUDIO capturado à parte — no iOS isso faz respeitar o mic externo
 
 /* --- Amplificador de microfone (Web Audio) ---
    A lapela tem sinal fraco; aqui passamos o áudio por um ganho + limitador
@@ -154,11 +155,11 @@ function teardownAudioGraph() {
 
 function buildAudioGraph() {
   const AC = window.AudioContext || window.webkitAudioContext;
-  if (!AC || !mediaStream || !mediaStream.getAudioTracks().length) return;
+  if (!AC || !micStream || !micStream.getAudioTracks().length) return;
   try {
     if (!audioCtx) audioCtx = new AC();
     teardownAudioGraph();
-    const audioOnly = new MediaStream(mediaStream.getAudioTracks());
+    const audioOnly = new MediaStream(micStream.getAudioTracks());
     micSourceNode = audioCtx.createMediaStreamSource(audioOnly);
     micGainNode = audioCtx.createGain();
     micGainNode.gain.value = settings.micGain;
@@ -173,15 +174,16 @@ function buildAudioGraph() {
   } catch { teardownAudioGraph(); }
 }
 
-// stream que vai para o gravador: vídeo da câmera + áudio amplificado (se disponível)
+// stream que vai para o gravador: vídeo da câmera + áudio (amplificado, ou cru como fallback)
 function getRecordingStream() {
-  if (micDestNode && micDestNode.stream.getAudioTracks().length && mediaStream) {
-    return new MediaStream([
-      ...mediaStream.getVideoTracks(),
-      ...micDestNode.stream.getAudioTracks(),
-    ]);
+  const video = mediaStream ? mediaStream.getVideoTracks() : [];
+  let audio = [];
+  if (micDestNode && micDestNode.stream.getAudioTracks().length) {
+    audio = micDestNode.stream.getAudioTracks();           // áudio amplificado (Web Audio)
+  } else if (micStream) {
+    audio = micStream.getAudioTracks();                    // fallback: mic cru, sem ganho
   }
-  return mediaStream; // fallback: sem Web Audio, grava o stream cru
+  return new MediaStream([...video, ...audio]);
 }
 
 async function initCamera() {
@@ -195,39 +197,21 @@ async function initCamera() {
     }
     // hqAudio ON = desliga o processamento de voz (eco/ruído/ganho).
     // Isso melhora MUITO a qualidade e faz o iOS respeitar o mic externo (lapela/Boya).
-    const proc = !settings.hqAudio;
     // Máxima qualidade: a câmera frontal (TrueDepth) do iPhone 14 Pro Max grava até 4K30.
     // 'ideal' degrada sozinho se o aparelho não entregar (não trava em nenhum iPhone).
+    // IMPORTANTE: pedimos VÍDEO sozinho aqui; o áudio vem numa chamada separada (initMic),
+    // que é o que faz o iOS respeitar o microfone externo (lapela/BOYALINK).
     const video = {
       facingMode: "user",
       width: { ideal: 3840 },
       height: { ideal: 2160 },
       frameRate: { ideal: 30 },
     };
-    const audio = {
-      echoCancellation: proc,
-      noiseSuppression: proc,
-      autoGainControl: proc,
-    };
-    // microfone escolhido pelo usuário (ex.: a BOYALINK) — o iOS não troca sozinho
-    if (settings.micDeviceId) audio.deviceId = { exact: settings.micDeviceId };
-    try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({ video, audio });
-    } catch (err) {
-      // mic escolhido sumiu (lapela desconectada) → volta ao automático
-      if (err && err.name === "OverconstrainedError" && audio.deviceId) {
-        delete audio.deviceId;
-        settings.micDeviceId = "";
-        saveSettings();
-        mediaStream = await navigator.mediaDevices.getUserMedia({ video, audio });
-      } else {
-        throw err;
-      }
-    }
+    mediaStream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
     $("camera").srcObject = mediaStream;
     $("camera").play().catch(() => {});
     watchStreamHealth();
-    buildAudioGraph();
+    await initMic();
     updateActiveMicLabel();
     refreshMicList();
   } catch (err) {
@@ -244,6 +228,39 @@ async function initCamera() {
     $("camera-error-msg").textContent = msg;
     errBox.classList.remove("hidden");
   }
+}
+
+// captura o ÁUDIO numa chamada separada da câmera (chave para o mic externo no iOS)
+async function initMic() {
+  const proc = !settings.hqAudio;
+  const audio = {
+    echoCancellation: proc,
+    noiseSuppression: proc,
+    autoGainControl: proc,
+  };
+  if (settings.micDeviceId) audio.deviceId = { exact: settings.micDeviceId };
+  try {
+    if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+    micStream = await navigator.mediaDevices.getUserMedia({ audio });
+  } catch (err) {
+    // mic escolhido sumiu (lapela desconectada) → volta ao automático
+    if (err && err.name === "OverconstrainedError" && audio.deviceId) {
+      delete audio.deviceId;
+      settings.micDeviceId = "";
+      saveSettings();
+      try { micStream = await navigator.mediaDevices.getUserMedia({ audio }); } catch { micStream = null; }
+    } else {
+      micStream = null;
+    }
+  }
+  buildAudioGraph();
+}
+
+// trocar mic/qualidade refaz só o áudio, sem tocar na câmera (sem piscar)
+async function reinitAudio() {
+  await initMic();
+  updateActiveMicLabel();
+  refreshMicList();
 }
 
 $("btn-retry-camera").addEventListener("click", initCamera);
@@ -274,7 +291,7 @@ async function refreshMicList() {
 function updateActiveMicLabel() {
   const el = $("mic-active");
   if (!el) return;
-  const t = mediaStream && mediaStream.getAudioTracks()[0];
+  const t = micStream && micStream.getAudioTracks()[0];
   el.textContent = t && t.label ? "🎙️ Captando: " + t.label : "";
 }
 
@@ -970,6 +987,7 @@ async function startRecording() {
     h >= 1400 ? 16_000_000 : // 1440p
     h >= 1000 ? 12_000_000 : // 1080p
                 8_000_000;
+  if (!micStream) await initMic(); // garante que o áudio existe (ex.: veio do background)
   const recStream = getRecordingStream();
   try {
     mediaRecorder = new MediaRecorder(
@@ -1089,6 +1107,9 @@ document.addEventListener("visibilitychange", () => {
     else {
       const cam = $("camera");
       if (cam.paused) cam.play().catch(() => {});
+      // o áudio pode ter sido encerrado no background — refaz se preciso
+      const at = micStream && micStream.getAudioTracks()[0];
+      if (!isRecording && (!at || at.readyState === "ended")) reinitAudio();
     }
   }
 });
@@ -1203,7 +1224,7 @@ $("set-hqaudio").addEventListener("change", (e) => {
   saveSettings();
   if (isRecording) { toast("Vale na próxima gravação"); return; }
   toast(settings.hqAudio ? "Áudio em alta qualidade ativado" : "Processamento de voz ativado");
-  initCamera();
+  reinitAudio(); // só o áudio — a câmera nem pisca
 });
 
 // troca de microfone: religa a câmera com o device escolhido
@@ -1211,7 +1232,7 @@ $("set-mic").addEventListener("change", (e) => {
   settings.micDeviceId = e.target.value;
   saveSettings();
   if (isRecording) { toast("Vale na próxima gravação"); return; }
-  initCamera();
+  reinitAudio(); // só o áudio — a câmera nem pisca
 });
 $("btn-refresh-mic").addEventListener("click", async () => {
   await refreshMicList();
@@ -1266,7 +1287,7 @@ $("btn-reset-settings").addEventListener("click", () => {
 /* ============================================================
    SERVICE WORKER + INIT
    ============================================================ */
-const APP_VERSION = "1.9.1";
+const APP_VERSION = "2.0.0";
 $("app-version").textContent = "v" + APP_VERSION;
 
 if ("serviceWorker" in navigator) {
