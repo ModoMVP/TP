@@ -103,6 +103,7 @@ const DEFAULT_SETTINGS = {
   countdown: 3,        // segundos
   hqAudio: true,       // áudio cru (sem processamento de voz) — melhor qualidade + aceita mic externo
   micGain: 2.5,        // amplificação do microfone (1 = original) — compensa lapela de sinal fraco
+  micDeviceId: "",     // microfone escolhido ("" = automático); iOS não seleciona o externo sozinho
 };
 
 const store = {
@@ -197,25 +198,38 @@ async function initCamera() {
     const proc = !settings.hqAudio;
     // Máxima qualidade: a câmera frontal (TrueDepth) do iPhone 14 Pro Max grava até 4K30.
     // 'ideal' degrada sozinho se o aparelho não entregar (não trava em nenhum iPhone).
-    mediaStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: "user",
-        width: { ideal: 3840 },
-        height: { ideal: 2160 },
-        frameRate: { ideal: 30 },
-      },
-      audio: {
-        echoCancellation: proc,
-        noiseSuppression: proc,
-        autoGainControl: proc,
-        sampleRate: 48000,
-        channelCount: 1,
-      },
-    });
+    const video = {
+      facingMode: "user",
+      width: { ideal: 3840 },
+      height: { ideal: 2160 },
+      frameRate: { ideal: 30 },
+    };
+    const audio = {
+      echoCancellation: proc,
+      noiseSuppression: proc,
+      autoGainControl: proc,
+    };
+    // microfone escolhido pelo usuário (ex.: a BOYALINK) — o iOS não troca sozinho
+    if (settings.micDeviceId) audio.deviceId = { exact: settings.micDeviceId };
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ video, audio });
+    } catch (err) {
+      // mic escolhido sumiu (lapela desconectada) → volta ao automático
+      if (err && err.name === "OverconstrainedError" && audio.deviceId) {
+        delete audio.deviceId;
+        settings.micDeviceId = "";
+        saveSettings();
+        mediaStream = await navigator.mediaDevices.getUserMedia({ video, audio });
+      } else {
+        throw err;
+      }
+    }
     $("camera").srcObject = mediaStream;
     $("camera").play().catch(() => {});
     watchStreamHealth();
     buildAudioGraph();
+    updateActiveMicLabel();
+    refreshMicList();
   } catch (err) {
     let msg;
     if (err && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError")) {
@@ -233,6 +247,44 @@ async function initCamera() {
 }
 
 $("btn-retry-camera").addEventListener("click", initCamera);
+
+/* --- Seleção de microfone (a BOYALINK precisa ser escolhida à mão no iOS) --- */
+async function refreshMicList() {
+  const sel = $("set-mic");
+  if (!sel || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+  let devices = [];
+  try { devices = await navigator.mediaDevices.enumerateDevices(); } catch { return; }
+  const mics = devices.filter((d) => d.kind === "audioinput");
+  sel.innerHTML = "";
+  const auto = document.createElement("option");
+  auto.value = "";
+  auto.textContent = "Automático (padrão do iPhone)";
+  sel.appendChild(auto);
+  mics.forEach((d, i) => {
+    const o = document.createElement("option");
+    o.value = d.deviceId;
+    o.textContent = d.label || `Microfone ${i + 1}`;
+    sel.appendChild(o);
+  });
+  // se o mic salvo ainda existe, mantém selecionado; senão volta ao automático
+  const exists = mics.some((d) => d.deviceId === settings.micDeviceId);
+  sel.value = exists ? settings.micDeviceId : "";
+}
+
+function updateActiveMicLabel() {
+  const el = $("mic-active");
+  if (!el) return;
+  const t = mediaStream && mediaStream.getAudioTracks()[0];
+  el.textContent = t && t.label ? "🎙️ Captando: " + t.label : "";
+}
+
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+  navigator.mediaDevices.addEventListener("devicechange", () => {
+    refreshMicList();
+    // conectou/desconectou a lapela sem o app estar gravando → religa na entrada nova
+    if (!isRecording && settings.micDeviceId) recoverCamera();
+  });
+}
 
 /* O iOS congela/derruba o stream da câmera quando o app vai para segundo
    plano ou quando abre o seletor de arquivos / folha de compartilhar.
@@ -1080,7 +1132,12 @@ document.querySelectorAll(".panel-close").forEach((btn) =>
 $("backdrop").addEventListener("click", closePanels);
 
 $("btn-scripts").addEventListener("click", () => { renderScriptList(); openPanel("panel-scripts"); });
-$("btn-settings").addEventListener("click", () => { syncSettingsUI(); openPanel("panel-settings"); });
+$("btn-settings").addEventListener("click", () => {
+  syncSettingsUI();
+  refreshMicList();
+  updateActiveMicLabel();
+  openPanel("panel-settings");
+});
 $("btn-recordings").addEventListener("click", () => { renderRecordingList(); openPanel("panel-recordings"); });
 
 /* ============================================================
@@ -1151,6 +1208,18 @@ $("set-hqaudio").addEventListener("change", (e) => {
   initCamera();
 });
 
+// troca de microfone: religa a câmera com o device escolhido
+$("set-mic").addEventListener("change", (e) => {
+  settings.micDeviceId = e.target.value;
+  saveSettings();
+  if (isRecording) { toast("Vale na próxima gravação"); return; }
+  initCamera();
+});
+$("btn-refresh-mic").addEventListener("click", async () => {
+  await refreshMicList();
+  toast("Lista de microfones atualizada");
+});
+
 // volume do microfone: ajuste ao vivo, sem religar nada
 $("set-micgain").addEventListener("input", (e) => {
   settings.micGain = parseFloat(e.target.value);
@@ -1199,7 +1268,7 @@ $("btn-reset-settings").addEventListener("click", () => {
 /* ============================================================
    SERVICE WORKER + INIT
    ============================================================ */
-const APP_VERSION = "1.8.0";
+const APP_VERSION = "1.9.0";
 $("app-version").textContent = "v" + APP_VERSION;
 
 if ("serviceWorker" in navigator) {
