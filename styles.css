@@ -378,6 +378,38 @@ html, body {
 .editor-actions { display: flex; gap: 10px; margin-top: 16px; }
 .editor-actions .btn { flex: 1; }
 
+/* Ajuda de formatação */
+.format-help {
+  margin-top: 12px;
+  background: var(--surface-2);
+  border-radius: 11px;
+  padding: 10px 14px;
+}
+.format-help summary { font-size: 14px; font-weight: 600; cursor: pointer; }
+.format-help-body { padding-top: 10px; display: flex; flex-direction: column; gap: 7px; }
+.format-help-body p { font-size: 13.5px; line-height: 1.45; }
+.format-help-body code {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-size: 12.5px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.format-help-body mark { background: #ffe600; color: #000; border-radius: 3px; padding: 0 3px; }
+.format-colors, .format-tip { color: var(--text-dim); }
+.format-help .btn { align-self: flex-start; margin-top: 2px; }
+
+/* Formatação renderizada no prompter */
+.prompter-content b { font-weight: 800; }
+.prompter-content mark {
+  background: #ffe600;
+  color: #000;
+  border-radius: 5px;
+  padding: 0 5px;
+  text-shadow: none;
+}
+
 /* ===== Configurações ===== */
 .setting { margin: 18px 0; }
 .setting > label { display: block; font-size: 15px; font-weight: 600; margin-bottom: 8px; }

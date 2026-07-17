@@ -53,6 +53,29 @@ A URL fica `https://SEU-USUARIO.github.io/tp-criativos/`.
 💡 Durante a gravação você pode pausar/retomar a rolagem (▶/⏸) e arrastar o texto com o dedo
 para reposicionar a leitura.
 
+## 🎨 Formatação do texto (cores, negrito…)
+
+O texto dos criativos aceita uma marcação simples — é texto puro, então copia e cola de
+qualquer lugar (ChatGPT, Notion, WhatsApp…) sem perder a formatação:
+
+| Você escreve | Aparece no teleprompter |
+|---|---|
+| `**texto**` | **negrito** |
+| `*texto*` | *itálico* |
+| `__texto__` | sublinhado |
+| `==texto==` | destaque com marca-texto (fundo amarelo) |
+| `[vermelho]texto[/vermelho]` | texto colorido |
+| `[#ff0055]texto[/]` | cor personalizada (hex) |
+
+Cores com nome: `amarelo`, `vermelho`, `verde`, `azul`, `laranja`, `rosa`, `roxo`,
+`ciano`, `branco`, `cinza`. Não aninhe uma cor dentro de outra cor.
+
+### Gerando o roteiro com IA já no formato certo
+
+No app: **📝 → editar criativo → “🎨 Formatação” → 📋 Copiar prompt para IA**.
+Cole esse prompt no ChatGPT/Claude junto com o seu pedido (ex.: “roteiro de 30s sobre X”)
+e a resposta já sai pronta para colar no app.
+
 ## 🔧 Detalhes técnicos
 
 - PWA estático: HTML + CSS + JS puros, sem dependências, sem backend

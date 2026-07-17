@@ -104,6 +104,21 @@
         <button id="btn-paste" class="btn btn-ghost small">📋 Colar</button>
       </div>
       <textarea id="script-text" class="textarea" placeholder="Cole ou digite aqui o texto do seu criativo…"></textarea>
+
+      <details class="format-help">
+        <summary>🎨 Formatação: cores, negrito, destaque…</summary>
+        <div class="format-help-body">
+          <p><code>**texto**</code> → <b>negrito</b></p>
+          <p><code>*texto*</code> → <i>itálico</i></p>
+          <p><code>__texto__</code> → <u>sublinhado</u></p>
+          <p><code>==texto==</code> → <mark>destaque</mark></p>
+          <p><code>[vermelho]texto[/vermelho]</code> → <span style="color:#ff453a">texto colorido</span></p>
+          <p class="format-colors">Cores: amarelo · vermelho · verde · azul · laranja · rosa · roxo · ciano · branco · cinza — ou hex: <code>[#ff0055]texto[/]</code></p>
+          <p class="format-tip">💡 Vai gerar o roteiro com IA? Copie o prompt abaixo e cole no ChatGPT/Claude junto com o seu pedido — o texto já vem no formato do app:</p>
+          <button id="btn-copy-ai-prompt" class="btn btn-primary small">📋 Copiar prompt para IA</button>
+        </div>
+      </details>
+
       <div class="editor-actions">
         <button id="btn-save-script" class="btn btn-primary">Salvar</button>
         <button id="btn-use-script" class="btn btn-ghost">Salvar e usar</button>

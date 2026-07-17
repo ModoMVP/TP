@@ -44,6 +44,46 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+/* ---------- Formatação do texto (marcação estilo Markdown + cores) ----------
+   **negrito**  *itálico*  __sublinhado__  ==destaque==
+   [amarelo]texto[/amarelo]  ou  [#ff0055]texto[/]                            */
+const COLOR_NAMES = {
+  amarelo: "#ffe600", vermelho: "#ff453a", verde: "#00ff88", azul: "#00ccff",
+  laranja: "#ff9f0a", rosa: "#ff6bcb", roxo: "#bf5af2", ciano: "#64d2ff",
+  branco: "#ffffff", preto: "#000000", cinza: "#98989d",
+};
+
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+const COLOR_TAG_RE = /\[(#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})|[a-zA-Zçãáéêíóú]+)\]([\s\S]*?)\[\/\1?\]/g;
+
+function markupToHtml(raw) {
+  let s = escapeHtml(raw);
+  // cores: [nome]...[/nome], [nome]...[/], [#hex]...[/]
+  let prev;
+  do {
+    prev = s;
+    s = s.replace(COLOR_TAG_RE, (match, tag, inner) => {
+      const color = tag.startsWith("#") ? tag : COLOR_NAMES[tag.toLowerCase()];
+      return color ? `<span style="color:${color}">${inner}</span>` : match;
+    });
+  } while (s !== prev);
+  s = s.replace(/\*\*([\s\S]+?)\*\*/g, "<b>$1</b>");
+  s = s.replace(/\*([^*\n]+)\*/g, "<i>$1</i>");
+  s = s.replace(/__([\s\S]+?)__/g, "<u>$1</u>");
+  s = s.replace(/==([\s\S]+?)==/g, "<mark>$1</mark>");
+  return s;
+}
+
+function stripMarkup(raw) {
+  return raw
+    .replace(COLOR_TAG_RE, "$2")
+    .replace(/\[\/?[#\w]*\]/g, "")
+    .replace(/\*\*|__|==|\*/g, "");
+}
+
 /* ---------- Estado / Configurações ---------- */
 const DEFAULT_SETTINGS = {
   speed: 2.0,          // multiplicador (base 28 px/s)
@@ -311,9 +351,8 @@ function getActiveScript() {
 
 function loadActiveScriptIntoPrompter() {
   const s = getActiveScript();
-  content.textContent = s
-    ? s.text
-    : "Toque em 📝 e cole o texto do seu criativo…";
+  if (s) content.innerHTML = markupToHtml(s.text);
+  else content.textContent = "Toque em 📝 e cole o texto do seu criativo…";
   resetScroll();
 }
 
@@ -325,7 +364,7 @@ function renderScriptList() {
   for (const s of sorted) {
     const li = document.createElement("li");
     li.className = "item-card" + (s.id === activeScriptId ? " active" : "");
-    const preview = s.text.slice(0, 120).replace(/\s+/g, " ");
+    const preview = stripMarkup(s.text).slice(0, 120).replace(/\s+/g, " ");
     li.innerHTML = `
       <div class="item-title"></div>
       <div class="item-sub"></div>
@@ -407,6 +446,29 @@ $("btn-use-script").addEventListener("click", () => {
   loadActiveScriptIntoPrompter();
   closePanels();
   toast(`Usando: ${s.name}`);
+});
+
+const AI_PROMPT = `Você vai escrever/formatar um roteiro de criativo para eu ler em um app de teleprompter.
+
+REGRAS DE FORMATAÇÃO — use APENAS estas marcações:
+- **texto** para negrito (palavras-chave, ganchos, CTAs)
+- *texto* para itálico
+- __texto__ para sublinhado
+- ==texto== para destacar com marca-texto (fundo amarelo)
+- [amarelo]texto[/amarelo] para colorir. Cores disponíveis: amarelo, vermelho, verde, azul, laranja, rosa, roxo, ciano, branco, cinza. Também aceita cor hexadecimal: [#ff0055]texto[/]
+- NUNCA aninhe uma cor dentro de outra cor.
+- NÃO use nenhuma outra marcação: sem títulos (#), sem listas (-), sem tabelas, sem HTML, sem blocos de código.
+- Separe as frases/blocos com quebras de linha simples, em trechos curtos e fáceis de ler em voz alta.
+
+Responda SOMENTE com o texto do roteiro já formatado, sem explicações antes ou depois.`;
+
+$("btn-copy-ai-prompt").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(AI_PROMPT);
+    toast("Prompt copiado! Cole no ChatGPT/Claude junto com seu pedido");
+  } catch {
+    prompt("Copie o prompt abaixo:", AI_PROMPT);
+  }
 });
 
 $("btn-paste").addEventListener("click", async () => {
