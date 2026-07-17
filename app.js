@@ -102,6 +102,7 @@ const DEFAULT_SETTINGS = {
   autoScrollOnRecord: true,
   countdown: 3,        // segundos
   hqAudio: true,       // áudio cru (sem processamento de voz) — melhor qualidade + aceita mic externo
+  micGain: 2.5,        // amplificação do microfone (1 = original) — compensa lapela de sinal fraco
 };
 
 const store = {
@@ -140,6 +141,48 @@ function saveScripts() { store.set("tp.scripts", scripts); }
    ============================================================ */
 let mediaStream = null;
 
+/* --- Amplificador de microfone (Web Audio) ---
+   A lapela tem sinal fraco; aqui passamos o áudio por um ganho + limitador
+   (evita distorção ao aumentar) antes de gravar. Fica alto E limpo.        */
+let audioCtx = null, micSourceNode = null, micGainNode = null, micCompNode = null, micDestNode = null;
+
+function teardownAudioGraph() {
+  [micSourceNode, micGainNode, micCompNode].forEach((n) => { try { n && n.disconnect(); } catch {} });
+  micSourceNode = micGainNode = micCompNode = null;
+}
+
+function buildAudioGraph() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC || !mediaStream || !mediaStream.getAudioTracks().length) return;
+  try {
+    if (!audioCtx) audioCtx = new AC();
+    teardownAudioGraph();
+    const audioOnly = new MediaStream(mediaStream.getAudioTracks());
+    micSourceNode = audioCtx.createMediaStreamSource(audioOnly);
+    micGainNode = audioCtx.createGain();
+    micGainNode.gain.value = settings.micGain;
+    micCompNode = audioCtx.createDynamicsCompressor(); // limitador anti-clipping
+    micCompNode.threshold.value = -3;
+    micCompNode.knee.value = 0;
+    micCompNode.ratio.value = 20;
+    micCompNode.attack.value = 0.003;
+    micCompNode.release.value = 0.25;
+    if (!micDestNode) micDestNode = audioCtx.createMediaStreamDestination();
+    micSourceNode.connect(micGainNode).connect(micCompNode).connect(micDestNode);
+  } catch { teardownAudioGraph(); }
+}
+
+// stream que vai para o gravador: vídeo da câmera + áudio amplificado (se disponível)
+function getRecordingStream() {
+  if (micDestNode && micDestNode.stream.getAudioTracks().length && mediaStream) {
+    return new MediaStream([
+      ...mediaStream.getVideoTracks(),
+      ...micDestNode.stream.getAudioTracks(),
+    ]);
+  }
+  return mediaStream; // fallback: sem Web Audio, grava o stream cru
+}
+
 async function initCamera() {
   const errBox = $("camera-error");
   errBox.classList.add("hidden");
@@ -172,6 +215,7 @@ async function initCamera() {
     $("camera").srcObject = mediaStream;
     $("camera").play().catch(() => {});
     watchStreamHealth();
+    buildAudioGraph();
   } catch (err) {
     let msg;
     if (err && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError")) {
@@ -876,9 +920,10 @@ async function startRecording() {
     h >= 1400 ? 16_000_000 : // 1440p
     h >= 1000 ? 12_000_000 : // 1080p
                 8_000_000;
+  const recStream = getRecordingStream();
   try {
     mediaRecorder = new MediaRecorder(
-      mediaStream,
+      recStream,
       mime
         ? { mimeType: mime, videoBitsPerSecond: videoBitrate, audioBitsPerSecond: 256_000 }
         : undefined
@@ -957,8 +1002,14 @@ async function onRecordingStopped() {
 }
 
 $("btn-record").addEventListener("click", () => {
-  if (isRecording) stopRecording();
-  else startRecording();
+  if (isRecording) {
+    stopRecording();
+  } else {
+    // iOS: o AudioContext só liga a partir de um gesto do usuário
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+    if (!micDestNode) buildAudioGraph();
+    startRecording();
+  }
 });
 
 /* ============================================================
@@ -1050,6 +1101,8 @@ function syncSettingsUI() {
   $("set-guide").checked = settings.guide;
   $("set-autoscroll").checked = settings.autoScrollOnRecord;
   $("set-hqaudio").checked = settings.hqAudio;
+  $("set-micgain").value = settings.micGain;
+  $("val-micgain").textContent = Math.round(settings.micGain * 100) + "%";
   $("set-textcolor").value = settings.textColor;
   $("set-bgcolor").value = settings.bgColor;
 
@@ -1098,6 +1151,14 @@ $("set-hqaudio").addEventListener("change", (e) => {
   initCamera();
 });
 
+// volume do microfone: ajuste ao vivo, sem religar nada
+$("set-micgain").addEventListener("input", (e) => {
+  settings.micGain = parseFloat(e.target.value);
+  saveSettings();
+  if (micGainNode) micGainNode.gain.value = settings.micGain;
+  $("val-micgain").textContent = Math.round(settings.micGain * 100) + "%";
+});
+
 $("text-color-row").addEventListener("click", (e) => {
   const color = e.target.dataset && e.target.dataset.color;
   if (!color) return;
@@ -1131,13 +1192,14 @@ $("btn-reset-settings").addEventListener("click", () => {
   if (!confirm("Restaurar todas as configurações para o padrão?")) return;
   settings = { ...DEFAULT_SETTINGS };
   saveSettings(); applyPrompterStyle(); syncSettingsUI();
+  if (micGainNode) micGainNode.gain.value = settings.micGain;
   toast("Configurações restauradas");
 });
 
 /* ============================================================
    SERVICE WORKER + INIT
    ============================================================ */
-const APP_VERSION = "1.7.0";
+const APP_VERSION = "1.8.0";
 $("app-version").textContent = "v" + APP_VERSION;
 
 if ("serviceWorker" in navigator) {
