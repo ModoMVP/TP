@@ -152,17 +152,21 @@ async function initCamera() {
     // hqAudio ON = desliga o processamento de voz (eco/ruído/ganho).
     // Isso melhora MUITO a qualidade e faz o iOS respeitar o mic externo (lapela/Boya).
     const proc = !settings.hqAudio;
+    // Máxima qualidade: a câmera frontal (TrueDepth) do iPhone 14 Pro Max grava até 4K30.
+    // 'ideal' degrada sozinho se o aparelho não entregar (não trava em nenhum iPhone).
     mediaStream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: "user",
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
+        width: { ideal: 3840 },
+        height: { ideal: 2160 },
         frameRate: { ideal: 30 },
       },
       audio: {
         echoCancellation: proc,
         noiseSuppression: proc,
         autoGainControl: proc,
+        sampleRate: 48000,
+        channelCount: 1,
       },
     });
     $("camera").srcObject = mediaStream;
@@ -745,8 +749,9 @@ async function renderRecordingList() {
         <button class="btn btn-danger small" data-act="del">Excluir</button>
       </div>`;
     li.querySelector(".item-title").textContent = r.name;
+    const res = r.height ? ` · ${r.height >= 2000 ? "4K" : r.height + "p"}` : "";
     li.querySelector(".item-sub").textContent =
-      `${fmtDate(r.createdAt)} · ${fmtTime(r.duration)} · ${fmtBytes(r.size)}`;
+      `${fmtDate(r.createdAt)} · ${fmtTime(r.duration)}${res} · ${fmtBytes(r.size)}`;
     li.addEventListener("click", async (e) => {
       const act = e.target.dataset && e.target.dataset.act;
       if (act === "play") playRecording(r);
@@ -863,11 +868,19 @@ async function startRecording() {
   if (!ok) return;
 
   const mime = pickMimeType();
+  // bitrate proporcional à resolução real entregue pela câmera (evita 4K comprimido demais)
+  const vset = mediaStream.getVideoTracks()[0]?.getSettings() || {};
+  const h = vset.height || 1080;
+  const videoBitrate =
+    h >= 2000 ? 24_000_000 : // 4K
+    h >= 1400 ? 16_000_000 : // 1440p
+    h >= 1000 ? 12_000_000 : // 1080p
+                8_000_000;
   try {
     mediaRecorder = new MediaRecorder(
       mediaStream,
       mime
-        ? { mimeType: mime, videoBitsPerSecond: 8_000_000, audioBitsPerSecond: 256_000 }
+        ? { mimeType: mime, videoBitsPerSecond: videoBitrate, audioBitsPerSecond: 256_000 }
         : undefined
     );
   } catch (err) {
@@ -916,6 +929,7 @@ async function onRecordingStopped() {
   if (!blob.size) { toast("Gravação vazia — tente novamente"); return; }
 
   const duration = Math.round((Date.now() - recStartedAt) / 1000);
+  const vset = mediaStream ? (mediaStream.getVideoTracks()[0]?.getSettings() || {}) : {};
   const script = getActiveScript();
   const base = script ? script.name : "Criativo";
   const takes = (await dbAll().catch(() => []))
@@ -927,6 +941,8 @@ async function onRecordingStopped() {
     mime,
     size: blob.size,
     duration,
+    width: vset.width || null,
+    height: vset.height || null,
     createdAt: Date.now(),
   };
 
@@ -1121,7 +1137,7 @@ $("btn-reset-settings").addEventListener("click", () => {
 /* ============================================================
    SERVICE WORKER + INIT
    ============================================================ */
-const APP_VERSION = "1.6.0";
+const APP_VERSION = "1.7.0";
 $("app-version").textContent = "v" + APP_VERSION;
 
 if ("serviceWorker" in navigator) {
